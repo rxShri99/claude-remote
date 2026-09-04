@@ -7,6 +7,7 @@
 #include "esp_bt.h"
 #include "esp_bt_main.h"
 #include "esp_gap_ble_api.h"
+#include "esp_gatts_api.h"
 #include "esp_hidd.h"
 #include "esp_hid_common.h"
 #include "esp_log.h"
@@ -17,6 +18,8 @@ static const char *TAG = "ble_hid";
 
 static esp_hidd_dev_t *s_dev = nullptr;
 static volatile bool s_connected = false;
+static esp_bd_addr_t s_peerAddr = {};
+static bool s_peerKnown = false;
 
 /* keyboard (report id 1) + mouse with wheel (report id 2) */
 static const uint8_t REPORT_MAP[] = {
@@ -113,6 +116,10 @@ static void gapCallback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *pa
     case ESP_GAP_BLE_AUTH_CMPL_EVT:
         ESP_LOGI(TAG, "auth %s", param->ble_security.auth_cmpl.success ? "ok" : "FAILED");
         statusUiSetEvent(param->ble_security.auth_cmpl.success ? "bonded" : "pairing failed");
+        if (param->ble_security.auth_cmpl.success) {
+            memcpy(s_peerAddr, param->ble_security.auth_cmpl.bd_addr, sizeof(esp_bd_addr_t));
+            s_peerKnown = true;
+        }
         break;
     default:
         break;
@@ -166,6 +173,10 @@ bool bleHidInit()
     esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &initKey, sizeof(initKey));
     esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rspKey, sizeof(rspKey));
 
+    /* Bluedroid has a single global GATTS callback — it must be handed to the
+       HID component or its services are never created (and START never fires). */
+    ESP_ERROR_CHECK(esp_ble_gatts_register_callback(esp_hidd_gatts_event_handler));
+
     esp_err_t err = esp_hidd_dev_init(&s_hidConfig, ESP_HID_TRANSPORT_BLE, hiddCallback, &s_dev);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "hidd init failed: %s", esp_err_to_name(err));
@@ -176,6 +187,13 @@ bool bleHidInit()
 }
 
 bool bleHidConnected() { return s_connected; }
+
+void bleHidDisconnect()
+{
+    if (s_connected && s_peerKnown) {
+        esp_ble_gap_disconnect(s_peerAddr);
+    }
+}
 
 void bleHidSendKey(uint8_t usage, uint8_t modifiers)
 {

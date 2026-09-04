@@ -7,6 +7,9 @@ namespace cr {
 bool bleHidInit();
 bool bleHidConnected();
 
+/* drop the current host link (device re-advertises automatically) */
+void bleHidDisconnect();
+
 /* press+release of one key. usage = HID keyboard usage id (0x28 = Enter). */
 void bleHidSendKey(uint8_t usage, uint8_t modifiers = 0);
 

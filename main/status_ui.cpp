@@ -14,7 +14,7 @@ static lv_obj_t *s_pairStatus;
 
 /* ---- remote screen ---- */
 static lv_obj_t *s_remoteScreen;
-static lv_obj_t *s_ring;
+static lv_obj_t *s_statusPill;
 static lv_obj_t *s_statusLabel;
 static lv_obj_t *s_eventLabel;
 
@@ -100,10 +100,10 @@ static void buildPairScreen(lv_obj_t *parent)
 /* ------------------------------------------------ remote screen */
 
 static lv_obj_t *makeButton(lv_obj_t *parent, const char *label, uint32_t color,
-                            int x, int y, lv_event_cb_t cb)
+                            int x, int y, int size, lv_event_cb_t cb)
 {
     lv_obj_t *btn = lv_button_create(parent);
-    lv_obj_set_size(btn, 96, 96);
+    lv_obj_set_size(btn, size, size);
     lv_obj_set_style_radius(btn, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(btn, lv_color_hex(color), 0);
     lv_obj_set_style_shadow_width(btn, 0, 0);
@@ -111,7 +111,7 @@ static lv_obj_t *makeButton(lv_obj_t *parent, const char *label, uint32_t color,
     lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, nullptr);
     lv_obj_t *l = lv_label_create(btn);
     lv_label_set_text(l, label);
-    lv_obj_set_style_text_font(l, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(l, size >= 100 ? &lv_font_montserrat_20 : &lv_font_montserrat_16, 0);
     lv_obj_center(l);
     return btn;
 }
@@ -145,47 +145,57 @@ static void buildRemoteScreen(lv_obj_t *parent)
 
     lv_obj_t *title = lv_label_create(s_remoteScreen);
     lv_label_set_text(title, "CLAUDE");
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(0x8a8f9c), 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 64);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 42);
 
-    s_ring = lv_obj_create(s_remoteScreen);
-    lv_obj_remove_style_all(s_ring);
-    lv_obj_set_size(s_ring, 170, 170);
-    lv_obj_set_style_radius(s_ring, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_border_width(s_ring, 14, 0);
-    lv_obj_set_style_border_color(s_ring, lv_color_hex(0xf2f4f8), 0);
-    lv_obj_align(s_ring, LV_ALIGN_CENTER, 0, -26);
+    /* status pill: color = Claude state */
+    s_statusPill = lv_obj_create(s_remoteScreen);
+    lv_obj_remove_style_all(s_statusPill);
+    lv_obj_set_size(s_statusPill, 168, 46);
+    lv_obj_set_style_radius(s_statusPill, 23, 0);
+    lv_obj_set_style_bg_opa(s_statusPill, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(s_statusPill, lv_color_hex(0x2a3040), 0);
+    lv_obj_align(s_statusPill, LV_ALIGN_TOP_MID, 0, 76);
 
-    s_statusLabel = lv_label_create(s_remoteScreen);
+    s_statusLabel = lv_label_create(s_statusPill);
     lv_label_set_text(s_statusLabel, "READY");
     lv_obj_set_style_text_font(s_statusLabel, &lv_font_montserrat_20, 0);
-    lv_obj_set_style_text_color(s_statusLabel, lv_color_hex(0xf2f4f8), 0);
-    lv_obj_align(s_statusLabel, LV_ALIGN_CENTER, 0, -26);
+    lv_obj_set_style_text_color(s_statusLabel, lv_color_hex(0x0b0e1a), 0);
+    lv_obj_center(s_statusLabel);
 
     s_eventLabel = lv_label_create(s_remoteScreen);
-    lv_label_set_text(s_eventLabel, "");
+    lv_label_set_text(s_eventLabel, "drag to scroll");
     lv_obj_set_style_text_color(s_eventLabel, lv_color_hex(0x8a8f9c), 0);
-    lv_obj_align(s_eventLabel, LV_ALIGN_BOTTOM_MID, 0, -24);
+    lv_obj_align(s_eventLabel, LV_ALIGN_BOTTOM_MID, 0, -30);
 
     /* drag-to-scroll on the background */
     lv_obj_add_flag(s_remoteScreen, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(s_remoteScreen, scrollDragCb, LV_EVENT_PRESSED, nullptr);
     lv_obj_add_event_cb(s_remoteScreen, scrollDragCb, LV_EVENT_PRESSING, nullptr);
 
-    /* action buttons along the bottom arc: ESC | MIC | ENTER */
-    makeButton(s_remoteScreen, "ESC", 0xb3121f, 36, 258, [](lv_event_t *) {
+    /* three BIG action buttons: ESC | MIC | ENTER (112px, sized to fit
+       the round bezel: every button center stays within r=150 of screen
+       center so the full circle is visible) */
+    makeButton(s_remoteScreen, "ESC", 0xb3121f, 34, 226, 112, [](lv_event_t *) {
         bleHidSendKey(KEY_ESC);
         statusUiSetEvent("ESC sent");
     });
-    makeButton(s_remoteScreen, "MIC", 0x2456c9, 158, 292, [](lv_event_t *) {
+    makeButton(s_remoteScreen, "MIC", 0x2456c9, 150, 246, 112, [](lv_event_t *) {
         bleHidSendKey(KEY_F5);
         statusUiSetEvent("MIC (F5) sent");
     });
-    makeButton(s_remoteScreen, "ENTER", 0x1d9e5a, 280, 258, [](lv_event_t *) {
+    makeButton(s_remoteScreen, "ENTER", 0x1d9e5a, 266, 226, 112, [](lv_event_t *) {
         bleHidSendKey(KEY_ENTER);
         statusUiSetEvent("ENTER sent");
     });
+
+    /* small disconnect button, top-right */
+    lv_obj_t *dc = makeButton(s_remoteScreen, LV_SYMBOL_CLOSE, 0x3a3f4d, 296, 66, 48, [](lv_event_t *) {
+        statusUiSetEvent("disconnecting...");
+        bleHidDisconnect();
+    });
+    lv_obj_set_style_text_color(lv_obj_get_child(dc, 0), lv_color_hex(0xff8a8a), 0);
 }
 
 /* ------------------------------------------------ api */
@@ -218,7 +228,7 @@ void statusUiSetStatus(ClaudeStatus st)
 {
     StatusStyle s = styleFor(st);
     lvgl_port_lock(0);
-    lv_obj_set_style_border_color(s_ring, lv_color_hex(s.color), 0);
+    lv_obj_set_style_bg_color(s_statusPill, lv_color_hex(s.color), 0);
     lv_label_set_text(s_statusLabel, s.text);
     lvgl_port_unlock();
 }
