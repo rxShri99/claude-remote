@@ -6,8 +6,8 @@ namespace cr {
 /* Claude session state shown as the big status ring. */
 enum ClaudeStatus : uint8_t {
     ST_BOOT = 0,   /* blue   — starting up */
-    ST_NO_KBD,     /* grey   — waiting for the USB keyboard */
-    ST_READY,      /* white  — keyboard up, idle */
+    ST_NO_BT,      /* grey   — not paired / advertising */
+    ST_READY,      /* white  — paired with the Mac, idle */
     ST_RUNNING,    /* green  — Claude running/thinking */
     ST_QUESTION,   /* amber  — Claude is asking; knob selects */
     ST_STOPPED,    /* red    — Claude stopped */

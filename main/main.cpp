@@ -34,7 +34,7 @@ extern "C" void app_main(void)
 
     ESP_LOGI(TAG, "== CLAUDE REMOTE == touch + BLE");
     bool ble = bleHidInit();
-    statusUiSetStatus(ble ? ST_NO_KBD : ST_STOPPED); /* grey: pair me */
+    statusUiSetStatus(ble ? ST_NO_BT : ST_STOPPED); /* grey: pair me */
 
     bool wasConnected = false;
     uint32_t heldSince = 0;
@@ -45,7 +45,7 @@ extern "C" void app_main(void)
         bool connected = bleHidConnected();
         if (connected != wasConnected) {
             wasConnected = connected;
-            statusUiSetStatus(connected ? ST_READY : ST_NO_KBD);
+            statusUiSetStatus(connected ? ST_READY : ST_NO_BT);
             statusUiSetEvent(connected ? "Mac connected" : "advertising...");
         }
 

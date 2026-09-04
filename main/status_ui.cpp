@@ -62,7 +62,7 @@ static StatusStyle styleFor(ClaudeStatus st)
 {
     switch (st) {
     case ST_BOOT:     return {0x4c6ef5, "STARTING"};
-    case ST_NO_KBD:   return {0x555a66, "PLUG KEYBOARD"};
+    case ST_NO_BT:    return {0x555a66, "PAIR BLUETOOTH"};
     case ST_READY:    return {0xf2f4f8, "READY"};
     case ST_RUNNING:  return {0x35e08a, "RUNNING"};
     case ST_QUESTION: return {0xffc53d, "CHOOSE"};
