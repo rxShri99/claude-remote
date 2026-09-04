@@ -1,5 +1,7 @@
 #include "status_ui.h"
 #include "ble_hid.h"
+#include "mic_stream.h"
+#include "ble_audio.h"
 
 #include <cstring>
 #include "lvgl.h"
@@ -197,7 +199,11 @@ static void buildRemoteScreen(lv_obj_t *parent)
         statusUiSetEvent("ESC sent");
     });
     makeButton(s_remoteScreen, "MIC", 0x2456c9, 150, 246, 112, [](lv_event_t *) {
-        bleHidSendKey(KEY_F5); /* Mac dictation shortcut is set to F5 */
+        if (!bleAudioReady()) {
+            statusUiSetEvent("start claude_mic.py on the Mac");
+            return;
+        }
+        micStreamStart();
         micScreenShow(true);
     });
     makeButton(s_remoteScreen, "ENTER", 0x1d9e5a, 266, 226, 112, [](lv_event_t *) {
@@ -249,27 +255,20 @@ static void buildMicScreen(lv_obj_t *parent)
     lv_anim_start(&a);
 
     s_micStatus = lv_label_create(s_micScreen);
-    lv_label_set_text(s_micStatus, "speak to your Mac");
+    lv_label_set_text(s_micStatus, "speak into the device");
     lv_obj_set_style_text_color(s_micStatus, lv_color_hex(0xffb3b8), 0);
     lv_obj_align(s_micStatus, LV_ALIGN_CENTER, 0, 4);
 
     /* CANCEL | SEND */
     makeButton(s_micScreen, "CANCEL", 0x3a3f4d, 52, 236, 112, [](lv_event_t *) {
-        bleHidSendKey(KEY_ESC); /* abort dictation */
+        micStreamStop(false);
         micScreenShow(false);
-        statusUiSetEvent("dictation cancelled");
+        statusUiSetEvent("voice cancelled");
     });
     makeButton(s_micScreen, "SEND", 0x1d9e5a, 248, 236, 112, [](lv_event_t *) {
-        bleHidSendKey(KEY_F5); /* stop dictation */
-        lv_label_set_text(s_micStatus, "sending...");
-        /* give macOS a moment to commit the transcript, then submit */
-        lv_timer_t *t = lv_timer_create([](lv_timer_t *timer) {
-            bleHidSendKey(KEY_ENTER);
-            micScreenShow(false);
-            statusUiSetEvent("dictation sent");
-            lv_timer_delete(timer);
-        }, 600, nullptr);
-        lv_timer_set_repeat_count(t, 1);
+        micStreamStop(true); /* helper transcribes, types, presses Enter */
+        micScreenShow(false);
+        statusUiSetEvent("transcribing on Mac...");
     });
 }
 

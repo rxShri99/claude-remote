@@ -1,4 +1,5 @@
 #include "ble_hid.h"
+#include "ble_audio.h"
 #include "status_ui.h"
 
 #include <cstring>
@@ -173,15 +174,16 @@ bool bleHidInit()
     esp_ble_gap_set_security_param(ESP_BLE_SM_SET_INIT_KEY, &initKey, sizeof(initKey));
     esp_ble_gap_set_security_param(ESP_BLE_SM_SET_RSP_KEY, &rspKey, sizeof(rspKey));
 
-    /* Bluedroid has a single global GATTS callback — it must be handed to the
-       HID component or its services are never created (and START never fires). */
-    ESP_ERROR_CHECK(esp_ble_gatts_register_callback(esp_hidd_gatts_event_handler));
+    /* Bluedroid has a single global GATTS callback: the audio service wraps
+       it and forwards everything that is not its own to the HID component. */
+    if (!bleAudioRegisterGatts()) return false;
 
     esp_err_t err = esp_hidd_dev_init(&s_hidConfig, ESP_HID_TRANSPORT_BLE, hiddCallback, &s_dev);
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "hidd init failed: %s", esp_err_to_name(err));
         return false;
     }
+    bleAudioStart(); /* mic audio GATT service rides the same link */
     ESP_LOGI(TAG, "BLE HID up as '%s'", s_hidConfig.device_name);
     return true;
 }
