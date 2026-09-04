@@ -4,12 +4,14 @@
 #include "esp_gatts_api.h"
 #include "esp_hidd.h"
 #include "esp_log.h"
+#include "status_ui.h"
+#include <cstdio>
 
 namespace cr {
 
 static const char *TAG = "ble_audio";
 
-constexpr uint16_t AUDIO_APP_ID = 0xA0D0;
+constexpr uint16_t AUDIO_APP_ID = 0x0A0D; /* must be <= 0x7FFF */
 
 /*
  * Canonical UUIDs (mirrored in tools/claude_mic.py):
@@ -64,7 +66,14 @@ static void gattsCb(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
 {
     if (event == ESP_GATTS_REG_EVT && param->reg.app_id == AUDIO_APP_ID) {
         s_if = gatts_if;
-        esp_ble_gatts_create_attr_tab(ATTR_TAB, gatts_if, IDX_NB, 0);
+        ESP_LOGI(TAG, "REG_EVT for audio app, if=%d", gatts_if);
+        esp_err_t err = esp_ble_gatts_create_attr_tab(ATTR_TAB, gatts_if, IDX_NB, 0);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "create_attr_tab: %s", esp_err_to_name(err));
+            char msg[48];
+            snprintf(msg, sizeof(msg), "aud tab call err %d", err);
+            statusUiSetEvent(msg);
+        }
         return; /* ours alone */
     }
 
@@ -76,6 +85,12 @@ static void gattsCb(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
                 memcpy(s_handles, param->add_attr_tab.handles, sizeof(s_handles));
                 esp_ble_gatts_start_service(s_handles[IDX_SVC]);
                 ESP_LOGI(TAG, "audio service started (val handle %d)", s_handles[IDX_CHAR_VAL]);
+                statusUiSetEvent("audio svc up");
+            } else {
+                char msg[48];
+                snprintf(msg, sizeof(msg), "aud tab st=%d n=%d", param->add_attr_tab.status,
+                         param->add_attr_tab.num_handle);
+                statusUiSetEvent(msg);
             }
             break;
         case ESP_GATTS_CONNECT_EVT:
@@ -111,7 +126,14 @@ bool bleAudioRegisterGatts()
 
 bool bleAudioStart()
 {
-    return esp_ble_gatts_app_register(AUDIO_APP_ID) == ESP_OK;
+    esp_err_t err = esp_ble_gatts_app_register(AUDIO_APP_ID);
+    ESP_LOGI(TAG, "app_register(0x%04X) -> %s", AUDIO_APP_ID, esp_err_to_name(err));
+    if (err != ESP_OK) {
+        char msg[48];
+        snprintf(msg, sizeof(msg), "aud app_reg err %d", err);
+        statusUiSetEvent(msg);
+    }
+    return err == ESP_OK;
 }
 
 bool bleAudioReady()

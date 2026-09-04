@@ -68,7 +68,8 @@ def transcribe(pcm: bytes) -> str:
         w.setframerate(SAMPLE_RATE)
         w.writeframes(pcm)
     r = subprocess.run(
-        [WHISPER, "-m", str(MODEL), "-f", wav_path, "-nt", "--no-prints", "-l", "en"],
+        [WHISPER, "-m", str(MODEL), "-f", wav_path, "-nt",
+         "--no-prints", "-l", "en"],
         capture_output=True, text=True, timeout=120)
     return r.stdout.strip()
 
