@@ -138,6 +138,9 @@ static void hiddCallback(void *, esp_event_base_t, int32_t id, void *event_data)
     case ESP_HIDD_CONNECT_EVENT:
         s_connected = true;
         ESP_LOGI(TAG, "host connected");
+        /* keep advertising: the Mac-side voice helper finds us by scan and
+           its "connection" shares the existing link */
+        startAdvertising();
         break;
     case ESP_HIDD_DISCONNECT_EVENT:
         s_connected = false;
