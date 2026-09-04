@@ -2,4 +2,3 @@ dependencies:
   lvgl/lvgl: "^9"
   espressif/esp_lvgl_port: "^2"
   espressif/esp_lcd_spd2010: "^2"
-  espressif/usb_host_hid: "^1"

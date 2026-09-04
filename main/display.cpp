@@ -7,6 +7,7 @@
  *    (EXIO1=TP_RST, EXIO2=LCD_RST) and report clearly when the panel is gone
  */
 #include "display.h"
+#include "touch_spd2010.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -23,6 +24,9 @@
 namespace cr {
 
 static const char *TAG = "display";
+static i2c_master_bus_handle_t s_i2cBus = nullptr;
+
+i2c_master_bus_handle_t displayI2CBus() { return s_i2cBus; }
 
 #define PIN_PWR_LATCH 7
 #define PIN_QSPI_SCK  40
@@ -84,8 +88,8 @@ static void lcdResetViaExpander()
     busCfg.clk_source = I2C_CLK_SRC_DEFAULT;
     busCfg.glitch_ignore_cnt = 7;
     busCfg.flags.enable_internal_pullup = true;
-    i2c_master_bus_handle_t bus = nullptr;
-    ESP_ERROR_CHECK(i2c_new_master_bus(&busCfg, &bus));
+    ESP_ERROR_CHECK(i2c_new_master_bus(&busCfg, &s_i2cBus));
+    i2c_master_bus_handle_t bus = s_i2cBus;
 
     uint8_t addr = 0;
     for (uint8_t a = 0x20; a <= 0x27; a++) {
@@ -179,6 +183,23 @@ bool displayInit()
         lv_area_t *a = (lv_area_t *)lv_event_get_param(e);
         a->x1 &= ~3; a->y1 &= ~3; a->x2 |= 3; a->y2 |= 3;
     }, LV_EVENT_INVALIDATE_AREA, nullptr);
+
+    /* touch -> LVGL pointer (custom SPD2010 reader; the stock driver's I/O
+       layer is broken on the new I2C API) */
+    if (touchInit(s_i2cBus)) {
+        lv_indev_t *indev = lv_indev_create();
+        lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
+        lv_indev_set_read_cb(indev, [](lv_indev_t *, lv_indev_data_t *data) {
+            uint16_t x, y;
+            if (touchRead(&x, &y)) {
+                data->state = LV_INDEV_STATE_PRESSED;
+                data->point.x = x;
+                data->point.y = y;
+            } else {
+                data->state = LV_INDEV_STATE_RELEASED;
+            }
+        });
+    }
 
     vTaskDelay(pdMS_TO_TICKS(100));
     backlight(100);
