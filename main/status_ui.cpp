@@ -197,7 +197,7 @@ static void buildRemoteScreen(lv_obj_t *parent)
         statusUiSetEvent("ESC sent");
     });
     makeButton(s_remoteScreen, "MIC", 0x2456c9, 150, 246, 112, [](lv_event_t *) {
-        bleHidSendKey(KEY_F5); /* start macOS dictation */
+        bleHidDictationChord(); /* macOS: "Press Control Key Twice" */
         micScreenShow(true);
     });
     makeButton(s_remoteScreen, "ENTER", 0x1d9e5a, 266, 226, 112, [](lv_event_t *) {
@@ -260,7 +260,7 @@ static void buildMicScreen(lv_obj_t *parent)
         statusUiSetEvent("dictation cancelled");
     });
     makeButton(s_micScreen, "SEND", 0x1d9e5a, 248, 236, 112, [](lv_event_t *) {
-        bleHidSendKey(KEY_F5); /* stop dictation */
+        bleHidDictationChord(); /* stop dictation */
         lv_label_set_text(s_micStatus, "sending...");
         /* give macOS a moment to commit the transcript, then submit */
         lv_timer_t *t = lv_timer_create([](lv_timer_t *timer) {

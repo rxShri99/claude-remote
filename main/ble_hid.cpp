@@ -205,6 +205,19 @@ void bleHidSendKey(uint8_t usage, uint8_t modifiers)
     esp_hidd_dev_input_set(s_dev, 0, 1, report, sizeof(report));
 }
 
+void bleHidDictationChord()
+{
+    if (!s_connected || !s_dev) return;
+    uint8_t down[8] = {0x01, 0, 0, 0, 0, 0, 0, 0}; /* Left Ctrl, no key */
+    uint8_t up[8] = {};
+    for (int tap = 0; tap < 2; tap++) {
+        esp_hidd_dev_input_set(s_dev, 0, 1, down, sizeof(down));
+        vTaskDelay(pdMS_TO_TICKS(40));
+        esp_hidd_dev_input_set(s_dev, 0, 1, up, sizeof(up));
+        if (tap == 0) vTaskDelay(pdMS_TO_TICKS(120));
+    }
+}
+
 void bleHidScroll(int8_t wheel)
 {
     if (!s_connected || !s_dev) return;

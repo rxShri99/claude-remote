@@ -13,6 +13,10 @@ void bleHidDisconnect();
 /* press+release of one key. usage = HID keyboard usage id (0x28 = Enter). */
 void bleHidSendKey(uint8_t usage, uint8_t modifiers = 0);
 
+/* double-tap of the Control key — macOS dictation's "Press Control Key
+   Twice" shortcut (start and stop). */
+void bleHidDictationChord();
+
 /* mouse wheel: positive = scroll up */
 void bleHidScroll(int8_t wheel);
 
