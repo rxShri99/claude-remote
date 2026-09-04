@@ -3,19 +3,23 @@
 
 namespace cr {
 
-/* Claude session state shown as the big status ring. */
+/* Claude session state shown as the remote screen's status ring. */
 enum ClaudeStatus : uint8_t {
-    ST_BOOT = 0,   /* blue   — starting up */
-    ST_NO_BT,      /* grey   — not paired / advertising */
-    ST_READY,      /* white  — paired with the Mac, idle */
+    ST_READY = 0,  /* white  — paired with the Mac, idle */
     ST_RUNNING,    /* green  — Claude running/thinking */
-    ST_QUESTION,   /* amber  — Claude is asking; knob selects */
+    ST_QUESTION,   /* amber  — Claude is asking */
     ST_STOPPED,    /* red    — Claude stopped */
 };
 
+/* Builds both screens: pairing/onboarding (shown first) and the remote. */
 void statusUiCreate();
+
+/* Switch between the onboarding screen (false) and the remote (true). */
+void statusUiSetConnected(bool connected);
+
 void statusUiSetStatus(ClaudeStatus st);
-/* transient line at the bottom: last key/knob event (debug + feedback) */
+
+/* One-line feedback (shown on whichever screen is active). */
 void statusUiSetEvent(const char *text);
 
 } // namespace cr

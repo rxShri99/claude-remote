@@ -29,12 +29,12 @@ extern "C" void app_main(void)
     }
 
     displayInit();
-    statusUiCreate();
-    statusUiSetStatus(ST_BOOT);
+    statusUiCreate(); /* onboarding screen shows first */
 
     ESP_LOGI(TAG, "== CLAUDE REMOTE == touch + BLE");
-    bool ble = bleHidInit();
-    statusUiSetStatus(ble ? ST_NO_BT : ST_STOPPED); /* grey: pair me */
+    if (!bleHidInit()) {
+        statusUiSetEvent("bluetooth init failed");
+    }
 
     bool wasConnected = false;
     uint32_t heldSince = 0;
@@ -45,8 +45,9 @@ extern "C" void app_main(void)
         bool connected = bleHidConnected();
         if (connected != wasConnected) {
             wasConnected = connected;
-            statusUiSetStatus(connected ? ST_READY : ST_NO_BT);
-            statusUiSetEvent(connected ? "Mac connected" : "advertising...");
+            statusUiSetConnected(connected);
+            if (connected) statusUiSetStatus(ST_READY);
+            statusUiSetEvent(connected ? "connected" : "connection lost - re-pairing");
         }
 
         /* hold PWR ~3s -> release power latch (battery: full power off) */
