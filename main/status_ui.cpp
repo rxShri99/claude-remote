@@ -18,6 +18,21 @@ static lv_obj_t *s_statusPill;
 static lv_obj_t *s_statusLabel;
 static lv_obj_t *s_eventLabel;
 
+/* ---- mic (dictation) screen ---- */
+static lv_obj_t *s_micScreen;
+static lv_obj_t *s_micStatus;
+
+static void micScreenShow(bool show)
+{
+    if (show) {
+        lv_obj_clear_flag(s_micScreen, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_remoteScreen, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(s_micScreen, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(s_remoteScreen, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
 struct StatusStyle {
     uint32_t color;
     const char *text;
@@ -182,8 +197,8 @@ static void buildRemoteScreen(lv_obj_t *parent)
         statusUiSetEvent("ESC sent");
     });
     makeButton(s_remoteScreen, "MIC", 0x2456c9, 150, 246, 112, [](lv_event_t *) {
-        bleHidSendKey(KEY_F5);
-        statusUiSetEvent("MIC (F5) sent");
+        bleHidSendKey(KEY_F5); /* start macOS dictation */
+        micScreenShow(true);
     });
     makeButton(s_remoteScreen, "ENTER", 0x1d9e5a, 266, 226, 112, [](lv_event_t *) {
         bleHidSendKey(KEY_ENTER);
@@ -198,6 +213,66 @@ static void buildRemoteScreen(lv_obj_t *parent)
     lv_obj_set_style_text_color(lv_obj_get_child(dc, 0), lv_color_hex(0xff8a8a), 0);
 }
 
+/* ------------------------------------------------ mic screen */
+
+static void buildMicScreen(lv_obj_t *parent)
+{
+    s_micScreen = fullscreenPanel(parent);
+    lv_obj_set_style_bg_color(s_micScreen, lv_color_hex(0x14060a), 0);
+    lv_obj_add_flag(s_micScreen, LV_OBJ_FLAG_HIDDEN);
+
+    lv_obj_t *title = lv_label_create(s_micScreen);
+    lv_label_set_text(title, "LISTENING");
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(0xff5a5f), 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 66);
+
+    /* pulsing record dot */
+    lv_obj_t *dot = lv_obj_create(s_micScreen);
+    lv_obj_remove_style_all(dot);
+    lv_obj_set_size(dot, 84, 84);
+    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(dot, lv_color_hex(0xff2e3f), 0);
+    lv_obj_align(dot, LV_ALIGN_CENTER, 0, -66);
+
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, dot);
+    lv_anim_set_exec_cb(&a, [](void *var, int32_t v) {
+        lv_obj_set_style_bg_opa((lv_obj_t *)var, (lv_opa_t)v, 0);
+    });
+    lv_anim_set_values(&a, 255, 90);
+    lv_anim_set_duration(&a, 600);
+    lv_anim_set_playback_duration(&a, 600);
+    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+    lv_anim_start(&a);
+
+    s_micStatus = lv_label_create(s_micScreen);
+    lv_label_set_text(s_micStatus, "speak to your Mac");
+    lv_obj_set_style_text_color(s_micStatus, lv_color_hex(0xffb3b8), 0);
+    lv_obj_align(s_micStatus, LV_ALIGN_CENTER, 0, 4);
+
+    /* CANCEL | SEND */
+    makeButton(s_micScreen, "CANCEL", 0x3a3f4d, 52, 236, 112, [](lv_event_t *) {
+        bleHidSendKey(KEY_ESC); /* abort dictation */
+        micScreenShow(false);
+        statusUiSetEvent("dictation cancelled");
+    });
+    makeButton(s_micScreen, "SEND", 0x1d9e5a, 248, 236, 112, [](lv_event_t *) {
+        bleHidSendKey(KEY_F5); /* stop dictation */
+        lv_label_set_text(s_micStatus, "sending...");
+        /* give macOS a moment to commit the transcript, then submit */
+        lv_timer_t *t = lv_timer_create([](lv_timer_t *timer) {
+            bleHidSendKey(KEY_ENTER);
+            micScreenShow(false);
+            statusUiSetEvent("dictation sent");
+            lv_timer_delete(timer);
+        }, 600, nullptr);
+        lv_timer_set_repeat_count(t, 1);
+    });
+}
+
 /* ------------------------------------------------ api */
 
 void statusUiCreate()
@@ -208,6 +283,7 @@ void statusUiCreate()
     lv_obj_clear_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
     buildPairScreen(scr);
     buildRemoteScreen(scr);
+    buildMicScreen(scr);
     lvgl_port_unlock();
 }
 
@@ -220,6 +296,7 @@ void statusUiSetConnected(bool connected)
     } else {
         lv_obj_clear_flag(s_pairScreen, LV_OBJ_FLAG_HIDDEN);
         lv_obj_add_flag(s_remoteScreen, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_micScreen, LV_OBJ_FLAG_HIDDEN);
     }
     lvgl_port_unlock();
 }
