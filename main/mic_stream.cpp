@@ -127,6 +127,10 @@ bool micStreamStart()
             .invert_flags = {},
         },
     };
+    /* the MEMS mic drives the RIGHT slot on this board (per Waveshare's
+       official MIC driver) — the default mono config reads the empty left
+       slot and yields pure noise */
+    stdCfg.slot_cfg.slot_mask = I2S_STD_SLOT_RIGHT;
     if (i2s_channel_init_std_mode(s_rx, &stdCfg) != ESP_OK ||
         i2s_channel_enable(s_rx) != ESP_OK) {
         ESP_LOGE(TAG, "i2s init failed");
