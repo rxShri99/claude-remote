@@ -1,4 +1,5 @@
 #include "ble_hid.h"
+#include "status_ui.h"
 
 #include <cstring>
 #include "freertos/FreeRTOS.h"
@@ -68,27 +69,50 @@ static esp_ble_adv_params_t s_advParams = {
 
 static void startAdvertising()
 {
+    /* The 31-byte adv packet can't fit appearance + 128-bit UUID + a long
+       name — the name goes into the scan response instead. */
     esp_ble_adv_data_t advData = {};
     advData.set_scan_rsp = false;
-    advData.include_name = true;
+    advData.include_name = false;
     advData.appearance = ESP_HID_APPEARANCE_KEYBOARD;
     advData.flag = ESP_BLE_ADV_FLAG_GEN_DISC | ESP_BLE_ADV_FLAG_BREDR_NOT_SPT;
     advData.service_uuid_len = sizeof(s_hidServiceUuid);
     advData.p_service_uuid = s_hidServiceUuid;
-    esp_ble_gap_config_adv_data(&advData);
+    esp_err_t err = esp_ble_gap_config_adv_data(&advData);
+
+    esp_ble_adv_data_t rspData = {};
+    rspData.set_scan_rsp = true;
+    rspData.include_name = true;
+    esp_err_t err2 = esp_ble_gap_config_adv_data(&rspData);
+
+    if (err != ESP_OK || err2 != ESP_OK) {
+        ESP_LOGE(TAG, "adv config failed: %s / %s", esp_err_to_name(err), esp_err_to_name(err2));
+        statusUiSetEvent("BT adv config failed");
+    }
 }
 
 static void gapCallback(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
 {
     switch (event) {
-    case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
+    case ESP_GAP_BLE_SCAN_RSP_DATA_SET_COMPLETE_EVT:
+        /* scan response is configured last -> everything is ready */
         esp_ble_gap_start_advertising(&s_advParams);
+        break;
+    case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
+        if (param->adv_start_cmpl.status == ESP_BT_STATUS_SUCCESS) {
+            ESP_LOGI(TAG, "advertising as 'Claude Remote'");
+            statusUiSetEvent("advertising: Claude Remote");
+        } else {
+            ESP_LOGE(TAG, "adv start failed: %d", param->adv_start_cmpl.status);
+            statusUiSetEvent("BT adv start failed");
+        }
         break;
     case ESP_GAP_BLE_SEC_REQ_EVT:
         esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
         break;
     case ESP_GAP_BLE_AUTH_CMPL_EVT:
         ESP_LOGI(TAG, "auth %s", param->ble_security.auth_cmpl.success ? "ok" : "FAILED");
+        statusUiSetEvent(param->ble_security.auth_cmpl.success ? "bonded" : "pairing failed");
         break;
     default:
         break;
