@@ -83,6 +83,8 @@ static void onTextWrite(const uint8_t *data, uint16_t len)
         case 1: statusUiSetStatus(ST_RUNNING); break;
         case 2: statusUiSetStatus(ST_QUESTION); break;
         case 3: statusUiSetStatus(ST_STOPPED); break;
+        case 4: statusUiSetStatus(ST_THINKING); break;
+        case 5: statusUiSetStatus(ST_WORKING); break;
         default: statusUiSetStatus(ST_READY); break;
         }
         return;

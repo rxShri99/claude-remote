@@ -48,6 +48,8 @@ static StatusStyle styleFor(ClaudeStatus st)
     case ST_RUNNING:  return {0x35e08a, "RUNNING"};
     case ST_QUESTION: return {0xffc53d, "CHOOSE"};
     case ST_STOPPED:  return {0xff2e3f, "STOPPED"};
+    case ST_THINKING: return {0xb08ae8, "THINKING"};
+    case ST_WORKING:  return {0x2ec4b6, "WORKING"};
     }
     return {0x555a66, "?"};
 }

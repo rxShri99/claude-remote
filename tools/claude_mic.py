@@ -140,20 +140,25 @@ async def watch_claude(client):
                 continue
             if d.get("isSidechain"):
                 continue
-            if d.get("type") == "user" and not d.get("isMeta"):
-                try:
-                    await send_status(client, 1)  # running
-                except Exception:
-                    pass
-            elif d.get("type") == "assistant":
-                text = extract_text(d.get("message", {}))
-                if text:
-                    try:
+            try:
+                if d.get("type") == "user" and not d.get("isMeta"):
+                    await send_status(client, 1)  # running (msg or tool result)
+                elif d.get("type") == "assistant":
+                    blocks = d.get("message", {}).get("content") or []
+                    kinds = [b.get("type") for b in blocks if isinstance(b, dict)]
+                    if "thinking" in kinds:
+                        await send_status(client, 4)
+                        print("⇠ thinking", flush=True)
+                    if "tool_use" in kinds:
+                        await send_status(client, 5)
+                        print("⇠ working", flush=True)
+                    text = extract_text(d.get("message", {}))
+                    if text:
                         await send_status(client, 0)  # ready
                         await send_text(client, "Claude: " + text)
-                        print(f"⇠ mirrored {len(text)} chars to device")
-                    except Exception as e:
-                        print("mirror failed:", e)
+                        print(f"⇠ mirrored {len(text)} chars", flush=True)
+            except Exception as e:
+                print("mirror failed:", e)
 
 
 class Session:
