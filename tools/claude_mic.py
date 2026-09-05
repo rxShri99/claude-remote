@@ -10,6 +10,7 @@ terminal the first time).
 Usage:  ./venv/bin/python claude_mic.py
 """
 import asyncio
+import json
 import struct
 import subprocess
 import sys
@@ -21,6 +22,8 @@ from bleak import BleakClient, BleakScanner
 
 DEVICE_NAME = "Claude Remote"
 AUDIO_CHAR = "7a0d0002-c1a0-de50-b3a4-4b1d4e101001"
+TEXT_CHAR = "7a0d0003-c1a0-de50-b3a4-4b1d4e101001"
+TRANSCRIPT_DIR = Path.home() / ".claude/projects/-Users-rxshri99-Projects-hackathons-granoala"
 SAMPLE_RATE = 16000
 WHISPER = "whisper-cli"
 MODEL = Path(__file__).parent / "models" / "ggml-base.en.bin"
@@ -85,8 +88,77 @@ end tell'''
     subprocess.run(["osascript", "-e", script], capture_output=True)
 
 
+async def send_text(client, text: str):
+    """0x20 start / 0x21 append / 0x22 show, 150-byte chunks."""
+    data = text.encode()[:560]
+    op = 0x20
+    for i in range(0, max(len(data), 1), 150):
+        await client.write_gatt_char(TEXT_CHAR, bytes([op]) + data[i:i + 150], response=False)
+        op = 0x21
+    await client.write_gatt_char(TEXT_CHAR, b"\x22", response=False)
+
+
+async def send_status(client, state: int):
+    """0=ready 1=running 2=question 3=stopped"""
+    await client.write_gatt_char(TEXT_CHAR, bytes([0x30, state]), response=False)
+
+
+def extract_text(msg) -> str:
+    content = msg.get("content")
+    if isinstance(content, str):
+        return content
+    parts = []
+    for c in content or []:
+        if isinstance(c, dict) and c.get("type") == "text":
+            parts.append(c.get("text", ""))
+    return "\n".join(parts).strip()
+
+
+async def watch_claude(client):
+    """Tail the newest Claude transcript; mirror replies + status to the device."""
+    pos, current = 0, None
+    while client.is_connected:
+        await asyncio.sleep(1)
+        files = sorted(TRANSCRIPT_DIR.glob("*.jsonl"), key=lambda f: f.stat().st_mtime)
+        if not files:
+            continue
+        newest = files[-1]
+        if newest != current:
+            current, pos = newest, newest.stat().st_size  # start at end
+            continue
+        size = newest.stat().st_size
+        if size <= pos:
+            continue
+        with open(newest) as f:
+            f.seek(pos)
+            chunk = f.read()
+            pos = f.tell()
+        for line in chunk.splitlines():
+            try:
+                d = json.loads(line)
+            except Exception:
+                continue
+            if d.get("isSidechain"):
+                continue
+            if d.get("type") == "user" and not d.get("isMeta"):
+                try:
+                    await send_status(client, 1)  # running
+                except Exception:
+                    pass
+            elif d.get("type") == "assistant":
+                text = extract_text(d.get("message", {}))
+                if text:
+                    try:
+                        await send_status(client, 0)  # ready
+                        await send_text(client, "Claude: " + text)
+                        print(f"⇠ mirrored {len(text)} chars to device")
+                    except Exception as e:
+                        print("mirror failed:", e)
+
+
 class Session:
-    def __init__(self):
+    def __init__(self, client=None):
+        self.client = client
         self.pcm = bytearray()
         self.active = False
 
@@ -114,8 +186,14 @@ class Session:
             if text:
                 print(f"→ {text!r}")
                 type_and_send(text)
+                if self.client:
+                    asyncio.get_event_loop().create_task(
+                        send_text(self.client, "You: " + text))
             else:
                 print("  (nothing recognized)")
+                if self.client:
+                    asyncio.get_event_loop().create_task(
+                        send_text(self.client, "(nothing recognized)"))
 
 
 async def main():
@@ -127,10 +205,11 @@ async def main():
         sys.exit("device not found — is it on and paired?")
     session = Session()
     async with BleakClient(dev) as client:
+        session.client = client
         await client.start_notify(AUDIO_CHAR, session.on_notify)
         print("connected — tap MIC on the device and speak into it")
-        while client.is_connected:
-            await asyncio.sleep(1)
+        await send_text(client, "voice bridge online")
+        await watch_claude(client)
     print("device disconnected")
 
 

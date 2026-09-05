@@ -27,14 +27,21 @@ static const uint8_t CHR_UUID[16] = {
     0x01, 0x10, 0x10, 0x4e, 0x1d, 0x4b, 0xa4, 0xb3,
     0x50, 0xde, 0xa0, 0xc1, 0x02, 0x00, 0x0d, 0x7a,
 };
+/* text-back characteristic 7a0d0003-...: Mac writes transcripts/responses */
+static const uint8_t TXT_UUID[16] = {
+    0x01, 0x10, 0x10, 0x4e, 0x1d, 0x4b, 0xa4, 0xb3,
+    0x50, 0xde, 0xa0, 0xc1, 0x03, 0x00, 0x0d, 0x7a,
+};
 
-enum { IDX_SVC, IDX_CHAR_DECL, IDX_CHAR_VAL, IDX_CCC, IDX_NB };
+enum { IDX_SVC, IDX_CHAR_DECL, IDX_CHAR_VAL, IDX_CCC, IDX_TXT_DECL, IDX_TXT_VAL, IDX_NB };
 
 static const uint16_t UUID_PRI_SVC = ESP_GATT_UUID_PRI_SERVICE;
 static const uint16_t UUID_CHAR_DECL = ESP_GATT_UUID_CHAR_DECLARE;
 static const uint16_t UUID_CCC = ESP_GATT_UUID_CHAR_CLIENT_CONFIG;
 static const uint8_t CHAR_PROP_NOTIFY = ESP_GATT_CHAR_PROP_BIT_NOTIFY;
+static const uint8_t CHAR_PROP_WRITE = ESP_GATT_CHAR_PROP_BIT_WRITE | ESP_GATT_CHAR_PROP_BIT_WRITE_NR;
 static uint8_t s_charVal[1] = {0};
+static uint8_t s_txtVal[1] = {0};
 static uint8_t s_cccVal[2] = {0, 0};
 
 static const esp_gatts_attr_db_t ATTR_TAB[IDX_NB] = {
@@ -54,7 +61,43 @@ static const esp_gatts_attr_db_t ATTR_TAB[IDX_NB] = {
     {{ESP_GATT_AUTO_RSP},
      {ESP_UUID_LEN_16, (uint8_t *)&UUID_CCC, ESP_GATT_PERM_READ | ESP_GATT_PERM_WRITE,
       sizeof(s_cccVal), sizeof(s_cccVal), s_cccVal}},
+    /* IDX_TXT_DECL */
+    {{ESP_GATT_AUTO_RSP},
+     {ESP_UUID_LEN_16, (uint8_t *)&UUID_CHAR_DECL, ESP_GATT_PERM_READ,
+      1, 1, (uint8_t *)&CHAR_PROP_WRITE}},
+    /* IDX_TXT_VAL */
+    {{ESP_GATT_AUTO_RSP},
+     {ESP_UUID_LEN_128, (uint8_t *)TXT_UUID, ESP_GATT_PERM_WRITE,
+      512, sizeof(s_txtVal), s_txtVal}},
 };
+
+/* ---- text-back protocol: 0x20 start, 0x21 append, 0x22 show; 0x30+state ---- */
+static char s_textBuf[600];
+static size_t s_textLen = 0;
+
+static void onTextWrite(const uint8_t *data, uint16_t len)
+{
+    uint8_t op = data[0];
+    if (op == 0x30 && len >= 2) {
+        switch (data[1]) {
+        case 1: statusUiSetStatus(ST_RUNNING); break;
+        case 2: statusUiSetStatus(ST_QUESTION); break;
+        case 3: statusUiSetStatus(ST_STOPPED); break;
+        default: statusUiSetStatus(ST_READY); break;
+        }
+        return;
+    }
+    if (op == 0x20) s_textLen = 0;
+    if (op == 0x20 || op == 0x21) {
+        size_t n = len - 1;
+        if (s_textLen + n >= sizeof(s_textBuf)) n = sizeof(s_textBuf) - 1 - s_textLen;
+        memcpy(s_textBuf + s_textLen, data + 1, n);
+        s_textLen += n;
+    } else if (op == 0x22) {
+        s_textBuf[s_textLen] = 0;
+        statusUiShowResponse(s_textBuf);
+    }
+}
 
 static esp_gatt_if_t s_if = ESP_GATT_IF_NONE;
 static uint16_t s_handles[IDX_NB] = {};
@@ -105,6 +148,8 @@ static void gattsCb(esp_gatts_cb_event_t event, esp_gatt_if_t gatts_if,
             if (param->write.handle == s_handles[IDX_CCC] && param->write.len >= 2) {
                 s_subscribed = (param->write.value[0] & 0x01) != 0;
                 ESP_LOGI(TAG, "helper %ssubscribed", s_subscribed ? "" : "un");
+            } else if (param->write.handle == s_handles[IDX_TXT_VAL] && param->write.len >= 1) {
+                onTextWrite(param->write.value, param->write.len);
             }
             break;
         default:

@@ -22,4 +22,7 @@ void statusUiSetStatus(ClaudeStatus st);
 /* One-line feedback (shown on whichever screen is active). */
 void statusUiSetEvent(const char *text);
 
+/* Multi-line message area on the remote screen (transcripts + Claude replies). */
+void statusUiShowResponse(const char *text);
+
 } // namespace cr

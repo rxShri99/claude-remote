@@ -19,6 +19,7 @@ static lv_obj_t *s_remoteScreen;
 static lv_obj_t *s_statusPill;
 static lv_obj_t *s_statusLabel;
 static lv_obj_t *s_eventLabel;
+static lv_obj_t *s_responseLabel;
 
 /* ---- mic (dictation) screen ---- */
 static lv_obj_t *s_micScreen;
@@ -181,6 +182,17 @@ static void buildRemoteScreen(lv_obj_t *parent)
     lv_obj_set_style_text_color(s_statusLabel, lv_color_hex(0x0b0e1a), 0);
     lv_obj_center(s_statusLabel);
 
+    /* conversation window: transcripts + Claude's replies land here */
+    s_responseLabel = lv_label_create(s_remoteScreen);
+    lv_label_set_text(s_responseLabel, "");
+    lv_label_set_long_mode(s_responseLabel, LV_LABEL_LONG_DOT);
+    lv_obj_set_width(s_responseLabel, 312);
+    lv_obj_set_height(s_responseLabel, 92); /* ~4 lines, ellipsized */
+    lv_obj_set_style_text_font(s_responseLabel, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(s_responseLabel, lv_color_hex(0xd7dbe4), 0);
+    lv_obj_set_style_text_align(s_responseLabel, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(s_responseLabel, LV_ALIGN_TOP_MID, 0, 130);
+
     s_eventLabel = lv_label_create(s_remoteScreen);
     lv_label_set_text(s_eventLabel, "drag to scroll");
     lv_obj_set_style_text_color(s_eventLabel, lv_color_hex(0x8a8f9c), 0);
@@ -306,6 +318,13 @@ void statusUiSetStatus(ClaudeStatus st)
     lvgl_port_lock(0);
     lv_obj_set_style_bg_color(s_statusPill, lv_color_hex(s.color), 0);
     lv_label_set_text(s_statusLabel, s.text);
+    lvgl_port_unlock();
+}
+
+void statusUiShowResponse(const char *text)
+{
+    lvgl_port_lock(0);
+    if (s_responseLabel) lv_label_set_text(s_responseLabel, text);
     lvgl_port_unlock();
 }
 
