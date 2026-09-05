@@ -50,6 +50,18 @@ round touchscreen --> ESP32-S3 --BLE HID--> Mac (Claude Code)
   power-on reset or `esptool write_mem 0x6000812C 0`. Avoid serial scripts
   that toggle DTR/RTS on this firmware; listen passively instead.
 
+## Background service (production mode)
+
+```sh
+tools/install_service.sh          # install + start at login, auto-restarts
+tail -f ~/Library/Logs/claude-remote.log
+tools/install_service.sh remove   # uninstall
+```
+
+The bridge runs as a launchd agent wrapped in ~/Applications/ClaudeRemote.app
+(the bundle carries the Bluetooth/Automation privacy declarations a bare
+python lacks). It reconnects with backoff whenever the device power-cycles.
+
 ## Build & flash
 
 ESP-IDF v5.5.2 at `../esp-idf`:

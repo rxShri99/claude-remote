@@ -7,10 +7,14 @@ transcribes it locally with whisper.cpp, then types the text into the
 frontmost app and presses Enter (grant Accessibility permission to your
 terminal the first time).
 
-Usage:  ./venv/bin/python claude_mic.py
+Runs forever: scans, connects, streams; reconnects with backoff when the
+device sleeps or roams. Designed to live under launchd via ClaudeRemote.app
+(see install_service.sh) but works fine from a terminal too.
 """
 import asyncio
+import datetime
 import json
+import shutil
 import struct
 import subprocess
 import sys
@@ -25,7 +29,7 @@ AUDIO_CHAR = "7a0d0002-c1a0-de50-b3a4-4b1d4e101001"
 TEXT_CHAR = "7a0d0003-c1a0-de50-b3a4-4b1d4e101001"
 TRANSCRIPT_DIR = Path.home() / ".claude/projects/-Users-rxshri99-Projects-hackathons-granoala"
 SAMPLE_RATE = 16000
-WHISPER = "whisper-cli"
+WHISPER = shutil.which("whisper-cli") or "/opt/homebrew/bin/whisper-cli"
 MODEL = Path(__file__).parent / "models" / "ggml-base.en.bin"
 
 AUD_START, AUD_END_SEND, AUD_FRAME, AUD_END_CANCEL = 1, 2, 3, 4
@@ -167,6 +171,10 @@ async def watch_claude(client):
                 print("mirror failed:", e)
 
 
+def log(msg: str):
+    print(f"[{datetime.datetime.now():%H:%M:%S}] {msg}", flush=True)
+
+
 class Session:
     def __init__(self, client=None):
         self.client = client
@@ -207,22 +215,38 @@ class Session:
                         send_text(self.client, "(nothing recognized)"))
 
 
-async def main():
-    if not MODEL.exists():
-        sys.exit(f"model missing: {MODEL}")
-    print(f"looking for '{DEVICE_NAME}'...")
+async def run_once() -> None:
     dev = await BleakScanner.find_device_by_name(DEVICE_NAME, timeout=15)
     if dev is None:
-        sys.exit("device not found — is it on and paired?")
+        raise RuntimeError("device not found (off / out of range)")
     session = Session()
     async with BleakClient(dev) as client:
         session.client = client
         await client.start_notify(AUDIO_CHAR, session.on_notify)
-        print("connected — tap MIC on the device and speak into it")
+        log("connected — voice bridge online")
         await send_text(client, "voice bridge online")
         await watch_claude(client)
-    print("device disconnected")
+    log("device disconnected")
+
+
+async def main():
+    if not MODEL.exists():
+        sys.exit(f"model missing: {MODEL}")
+    log(f"claude-remote bridge starting (whisper: {WHISPER})")
+    backoff = 3
+    while True:
+        try:
+            await run_once()
+            backoff = 3  # clean disconnect: retry quickly
+        except Exception as e:
+            log(f"session error: {e}")
+            backoff = min(backoff * 2, 60)
+        log(f"reconnecting in {backoff}s...")
+        await asyncio.sleep(backoff)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        log("bye")
