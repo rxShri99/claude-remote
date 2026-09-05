@@ -142,7 +142,13 @@ async def watch_claude(client):
                 continue
             try:
                 if d.get("type") == "user" and not d.get("isMeta"):
-                    await send_status(client, 1)  # running (msg or tool result)
+                    raw = extract_text(d.get("message", {})) or ""
+                    if "[Request interrupted" in raw:
+                        await send_status(client, 3)  # stopped
+                        await send_text(client, "(stopped)")
+                        print("⇠ stopped", flush=True)
+                    else:
+                        await send_status(client, 1)  # running (msg or tool result)
                 elif d.get("type") == "assistant":
                     blocks = d.get("message", {}).get("content") or []
                     kinds = [b.get("type") for b in blocks if isinstance(b, dict)]

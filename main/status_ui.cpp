@@ -210,6 +210,7 @@ static void buildRemoteScreen(lv_obj_t *parent)
        center so the full circle is visible) */
     makeButton(s_remoteScreen, "ESC", 0xb3121f, 34, 226, 112, [](lv_event_t *) {
         bleHidSendKey(KEY_ESC);
+        statusUiSetStatus(ST_STOPPED); /* instant feedback; watcher corrects later */
         statusUiSetEvent("ESC sent");
     });
     makeButton(s_remoteScreen, "MIC", 0x2456c9, 150, 246, 112, [](lv_event_t *) {
